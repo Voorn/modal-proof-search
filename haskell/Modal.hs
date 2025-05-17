@@ -3,6 +3,8 @@ module Modal where
 import SetList
 import Knowledge
 
+-- This file defines multimodal systems and modal sequents
+
 -- These specify the modal axioms. They need to satisfy certain properties in order to admit a terminating and exhaustive proof search. 
 -- a) imp M N = true stands for M => N, and must be a transitive and reflexive relation.
 -- b) lat M N = R means M => R, N => R and for any S where M => S and N => S, then R => S 
@@ -12,6 +14,8 @@ import Knowledge
 --      d1) compatibility with cou, if M => N R and N => () then M => R. And if M => N R and R => () then M => N 
 --      d2) semicompatibility with imp. If M' => M and M => N R, then there must be an N' and R' such that M' => N' R' and N' => N and R' => R
 --      d3) selfcomaptivbility. If M => N R and N => S T, then there are K, S', T', R' such that M => S' K and K => T' R' and S' => S and T' => T and R' => R
+-- e) omi M N gives a basis to all M => N R1 ... Rn axioms 
+-- f) def gives a default modality, used for placeholders
 class Lat m where
     imp :: m -> m -> Bool
     lat :: m -> m -> Maybe m
@@ -20,6 +24,7 @@ class Lat m where
     omi :: m -> m -> Maybe m 
     def :: m
 
+-- Auxiliary derivable functions
 latSplit :: Eq m => Lat m => m -> m -> m -> Bool
 latSplit m n r
   = foldr ((||) . (\ (n', r') -> imp r' r && imp n' n)) False (awa m)
@@ -59,7 +64,7 @@ instance Ord a => Struct (Bowtie a b) (Know a b) where
     weak :: Bowtie a b -> Know a b -> Know a b
     weak b k = tranBowKnow (mergeKnowBow const k b)
 
-
+-- Modal sequents
 data MBowtie m a b =
     MBas (Bowtie a b)
     |   MBin [a] m (Bowtie a b)
@@ -83,6 +88,7 @@ instance (Show m , Show a , Show b) => Show (MBowtie m a b) where
     show (MBas bow) = stringBowtie bow
     show (MBin a m bow) = stringList a ++ "[" ++ show m ++ "] " ++ stringBowtie bow
 
+-- Implication function between modal sequents
 impMBowtie :: Ord a => Lat m => MBowtie m a b -> MBowtie m a b -> Bool
 impMBowtie (MBas b1) (MBas b2) = impBowtie b1 b2
 impMBowtie (MBin l1 m1 b1) (MBin l2 m2 b2) = imp m1 m2 && subSet l1 l2 && impBowtie b1 b2
@@ -131,6 +137,8 @@ cleanMBow :: Ord a => MBowtie m a b -> MBowtie m a b
 cleanMBow (MBas bow) = MBas (cleanBow bow)
 cleanMBow (MBin a m bow) = MBin (sortSet a) m (cleanBow bow)
 
+
+-- Modal Knowledge Database.
 type MKnow m a b = (Know a b , [(m , Data a (Know a b))])
 
 fstringDataKnow :: Show a => Show b => String -> String -> Data a (Know a b) -> String
@@ -143,6 +151,7 @@ stringMKnow (Knowledge.No , []) = ""
 stringMKnow (Knowledge.No , (m , k) : t) = show m ++ "\n" ++ fstringDataKnow "" ("[" ++ show m ++ "] ") k ++ "\n\n" ++ stringMKnow (Knowledge.No , t)
 stringMKnow (k , t) = fstringKnow "" k ++ "\n" ++ stringMKnow (Knowledge.No , t)
 
+-- Filter out everything from database covered by a sequent
 filterMKnow :: Ord a => Lat m => MBowtie m a b -> MKnow m a b -> MKnow m a b
 filterMKnow (MBas bow) (know , list) = (filterKnow bow know , list)
 filterMKnow (MBin l m bow) (know , list) = (know , maybeList (fmap (\(n , dat) ->
@@ -150,6 +159,7 @@ filterMKnow (MBin l m bow) (know , list) = (know , maybeList (fmap (\(n , dat) -
         filterData (\ x y -> let p = filterKnow x y in if isnoKnow p then Nothing else Just p) (l , bow) dat >>= \x -> Just (n , x)
     else Just (n , dat)) list))
 
+-- Check if sequent is covered\validated by database
 inMKnow :: Ord a => Lat m => MBowtie m a b -> MKnow m a b -> Bool
 inMKnow (MBas bow) (know , list) = inKnow bow know
 inMKnow (MBin l m bow) (know , []) = inKnow bow know
@@ -157,6 +167,7 @@ inMKnow (MBin l m bow) (know , (n , dat) : t)
     |   imp n m         =   inData inKnow (l , bow) dat || inMKnow (MBin l m bow) (know , t)
     |   otherwise       =   inMKnow (MBin l m bow) (know , t)
 
+-- Add new sequent to database
 addMKnow :: Ord a => Ord m => Lat m => MBowtie m a b -> MKnow m a b -> MKnow m a b
 addMKnow (MBas bow) (know , lis) = (addKnow bow know , lis >>= \(m , dat) ->
     case filterData (\ x y -> let z = filterKnow x y in if isnoKnow z then Nothing else Just z ) ([] , bow) dat of
@@ -178,6 +189,7 @@ addMKnow2 b (hknow , hlis) l m bow ((n , dat) : t)
             Just x    ->  addMKnow2 b (hknow , hlis ++ [(n , x)]) l m bow t
     |   otherwise   =   addMKnow2 b (hknow , hlis ++ [(n , dat)]) l m bow t
 
+-- Main cut function for Modal Knowledge Database and Modal Sequent
 cutMKnowMBow :: Ord a => Lat m => (b -> b -> b) -> MKnow m a b -> MBowtie m a b -> [MBowtie m a b]
 cutMKnowMBow step (know , t) (MBas bow) = fmap MBas (cutKnowBow step know bow) ++ cutMKnowMBowBasMod step t bow
 cutMKnowMBow step (know , t) (MBin l m bow) = (cutKnowBow step know bow >>= \cut -> [MBin l m cut]) ++ cutMKnowMBowBinMod step t l m bow
@@ -194,7 +206,7 @@ cutMKnowMBowBinMod step ((n , dat) : t) l m bow = case lat m n of
     Nothing         ->  cutMKnowMBowBinMod step t l m bow
 
 
--- simple version
+-- Main cut function for Modal Knowledge Database and Modal Sequent. Only performs Simple cuts
 cutMKnowMBowS :: Ord a => Lat m => (b -> b -> b) -> Bool -> MKnow m a b -> MBowtie m a b -> [MBowtie m a b]
 cutMKnowMBowS step b (know , t) (MBas bow) = fmap MBas (cutKnowBowS step b know bow) -- ++ cutMKnowMBowBasModS step b t bow
 cutMKnowMBowS step b (know , t) (MBin l m bow) = (cutKnowBowS step b know bow >>= \cut -> [MBin l m cut]) ++ cutMKnowMBowBinModS step b t l m bow

@@ -1,5 +1,8 @@
 module SetList where
 
+-- This file established the some basic database functions. Mostly unused in the rest. 
+-- Main thing used is the "Data" structure
+
 class Top a where
     is1 :: a -> Bool
     fil2 :: a -> a -> Maybe a

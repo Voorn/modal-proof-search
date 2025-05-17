@@ -68,8 +68,13 @@ filList a (b : r)
     |   otherwise   =   b : filList a r
 
 difList :: Ord a => [ a ] -> [ a ] -> Bool
-difList [] r = True 
-difList (a : l) r = not (inList a r) && difList l r
+difList l r = foldr (\ a -> (&&) (not (inList a r))) True l
+
+capList :: Eq a => [ a ] -> [ a ] -> [ a ]
+capList [] r = []
+capList (x : l) r
+    |   inList x r  =   x : capList l r 
+    |   otherwise   =   capList l r
 
 -- Check if an element is contained in a set
 inSet :: Ord a => a -> [ a ] -> Bool
@@ -90,9 +95,9 @@ subSet (a : l) (b : r)
 -- Check if two sets are disjoint
 difSet :: Ord a => [ a ] -> [ a ] -> Bool
 difSet l [] = True
-difSet [] r = True 
+difSet [] r = True
 difSet (a : l) (b : r)
-    |   a == b      =   False 
+    |   a == b      =   False
     |   a <  b      =   difSet l (b : r)
     |   otherwise   =   difSet (a : l) r
 
@@ -106,10 +111,10 @@ addSet a (b : l)
 
 -- Take the union of two sets
 joinSet :: Ord a => [a] -> [a] -> [a]
-joinSet [] r = r 
-joinSet l [] = l 
-joinSet (a : l) (b : r) 
-    |   a == b      =   a : joinSet l r 
+joinSet [] r = r
+joinSet l [] = l
+joinSet (a : l) (b : r)
+    |   a == b      =   a : joinSet l r
     |   a < b       =   a : joinSet l (b : r)
     |   otherwise   =   b : joinSet (a : l) r
 
@@ -146,13 +151,6 @@ impBowtie ((a , v) : l , f) ((b , w) : r , g)
     |   a < b       =   False
     |   a == b      =   (v == w) && impBowtie (l , f) (r , g)
     |   otherwise   =   impBowtie ((a , v) : l , f) (r , g)
-
---compBowtie :: Ord a => Bowtie a b -> Bowtie a b -> Comp 
---compBowtie ([] , f) ([] , g) = Same 
---compBowtie ([] , f) (r , g) = Better 
---compBowtie (l , f) ([] , g) = Worse 
---compBowtie ((a , v) : l , f) ((b , w) : r , g) 
---    |   a < b       =   
 
 -- Whether the bowties is implied by any of the other bowties
 inBowties :: Ord a => Bowtie a b -> [Bowtie a b] -> Bool
@@ -349,6 +347,9 @@ stringSeq (l , r , f) = show f ++ "\n" ++ stringList l ++ "⊢ " ++ stringList r
 stringBowtie :: Show a => Show b => Bowtie a b -> String
 stringBowtie bow = let (l , r , f) = tranBowSeq bow in stringList l ++ "⊢ " ++ stringList r ++ "\n" ++ show f
 
+stringBowtieNP :: Show a => Show b => Bowtie a b -> String
+stringBowtieNP bow = let (l , r , f) = tranBowSeq bow in stringList l ++ "⊢ " ++ stringList r
+
 stringBowties :: Show a => Show b => [Bowtie a b] -> String
 stringBowties [] = ""
 stringBowties (b : l) = stringSeq (tranBowSeq b) ++ "\n" ++ stringBowties l
@@ -443,15 +444,6 @@ cutKnowBowSimple step know bow
     |   countCons bow <= 1      =   cutKnowBow step know bow
     |   otherwise               =   cutKnowBowS step True know bow
 
--- The big ones:
---mergeKnowKnow :: Ord a => Know a b -> Know a b -> Know a b 
---mergeKnowKnow (Yes f) r = Yes f 
---mergeKnowKnow No r = r
---mergeKnowKnow t (Yes g) = Yes g
---mergeKnowKnow t No = t 
---mergeKnowKnow (Node a ax am ay) (Node b bx bm by)
---    |   a == b      =   let cx = 
-
 -- Auotmatic rule applications 
 sieveBow :: Eq a => Bowtie a b -> a -> Bowtie a b
 sieveBow ([] , f) l = ([] , f)
@@ -459,127 +451,132 @@ sieveBow ((a , k) : l , f) r = let (l' , f') = sieveBow (l , f) r in
     if k && (a == r) then (l' , f') else ((a , k) : l' , f')
 
 
-extractKnow :: Ord a => [a] -> [a] -> Know a b -> Know a b 
-extractKnow assu ques (Yes f) = Yes f 
-extractKnow assu ques No = No 
-extractKnow [] [] (Node a l m r) = extractKnow [] [] m 
-extractKnow (b : assu) [] (Node a l m r) 
-    |   b < a       =   extractKnow assu [] (Node a l m r) 
+extractKnow :: Ord a => [a] -> [a] -> Know a b -> Know a b
+extractKnow assu ques (Yes f) = Yes f
+extractKnow assu ques No = No
+extractKnow [] [] (Node a l m r) = extractKnow [] [] m
+extractKnow (b : assu) [] (Node a l m r)
+    |   b < a       =   extractKnow assu [] (Node a l m r)
     |   b == a      =   let nl = extractKnow assu [] l in if isnoKnow nl then extractKnow assu [] m else Node a nl (extractKnow assu [] m) No
-    |   otherwise   =   extractKnow (b : assu) [] m 
-extractKnow [] (c : ques) (Node a l m r) 
-    |   c < a       =   extractKnow [] ques (Node a l m r) 
+    |   otherwise   =   extractKnow (b : assu) [] m
+extractKnow [] (c : ques) (Node a l m r)
+    |   c < a       =   extractKnow [] ques (Node a l m r)
     |   c == a      =   let nr = extractKnow [] ques r in if isnoKnow nr then extractKnow [] ques m else Node a No (extractKnow [] ques m) nr
-    |   otherwise   =   extractKnow [] (c : ques) m 
-extractKnow (b : assu) (c : ques) (Node a l m r) 
-    |   b < a               =   extractKnow assu (c : ques) (Node a l m r) 
-    |   c < a               =   extractKnow (b : assu) ques (Node a l m r) 
-    |   b == a && c == a    =   let nl = extractKnow assu ques l in 
-                                let nr = extractKnow assu ques r in  
+    |   otherwise   =   extractKnow [] (c : ques) m
+extractKnow (b : assu) (c : ques) (Node a l m r)
+    |   b < a               =   extractKnow assu (c : ques) (Node a l m r)
+    |   c < a               =   extractKnow (b : assu) ques (Node a l m r)
+    |   b == a && c == a    =   let nl = extractKnow assu ques l in
+                                let nr = extractKnow assu ques r in
                                 if isnoKnow nl && isnoKnow nr then extractKnow assu ques m else Node a nl (extractKnow assu ques m) nr
     |   b == a              =   let nl = extractKnow assu (c : ques) l in if isnoKnow nl then extractKnow assu (c : ques) m else Node a nl (extractKnow assu (c : ques) m) No
     |   c == a              =   let nr = extractKnow (b : assu)  ques r in if isnoKnow nr then extractKnow (b : assu)  ques m else Node a No (extractKnow (b : assu)  ques m) nr
     |   otherwise           =   extractKnow (b : assu) (c : ques) m
 
-
+-- * Sort series of queries into assumptions and goals
 extractQuery :: Ord a => [(a , Bool)] -> ([a] , [a])
 extractQuery [] = ([] , [])
 extractQuery ((a , True) : l) = let (x , y) = extractQuery l in (addSet a x , y)
-extractQuery ((a , False) : l) = let (x , y) = extractQuery l in (x , addSet a y) 
+extractQuery ((a , False) : l) = let (x , y) = extractQuery l in (x , addSet a y)
+
+
+-- ================================================
+-- EXTRA: Handling multiple knowledge databases
+-- ================================================
 
 -- merge two knowledge sets, as in pair all sequents
-mergeKnowKnow :: Ord a => (b -> b -> b) -> Know a b -> Know a b -> Know a b 
-mergeKnowKnow f No t'                       =   No 
+mergeKnowKnow :: Ord a => (b -> b -> b) -> Know a b -> Know a b -> Know a b
+mergeKnowKnow f No t'                       =   No
 mergeKnowKnow f t No                        =   No
 mergeKnowKnow f (Yes b) (Yes b')            =   Yes (f b b')
 mergeKnowKnow f (Yes b) (Node a' l' m' r')  =   Node a' (mergeKnowKnow f (Yes b) l') (mergeKnowKnow f (Yes b) m') (mergeKnowKnow f (Yes b) r')
 mergeKnowKnow f (Node a l m r) (Yes b')     =   Node a (mergeKnowKnow f l (Yes b')) (mergeKnowKnow f m (Yes b')) (mergeKnowKnow f r (Yes b'))
-mergeKnowKnow f (Node a l m r) (Node a' l' m' r')   
-    |   a < a'                              =   let nm = mergeKnowKnow f m (Node a' l' m' r') in 
-                                                let nl = filter2Know nm (mergeKnowKnow f l (Node a' l' m' r')) in 
-                                                let nr = filter2Know nm (mergeKnowKnow f r (Node a' l' m' r')) in 
+mergeKnowKnow f (Node a l m r) (Node a' l' m' r')
+    |   a < a'                              =   let nm = mergeKnowKnow f m (Node a' l' m' r') in
+                                                let nl = filter2Know nm (mergeKnowKnow f l (Node a' l' m' r')) in
+                                                let nr = filter2Know nm (mergeKnowKnow f r (Node a' l' m' r')) in
                                                 if isnoKnow nl  && isnoKnow nr then nm else Node a nl nm nr
-    |   a' < a                              =   let nm = mergeKnowKnow f (Node a l m r) m' in 
-                                                let nl = filter2Know nm (mergeKnowKnow f (Node a l m r) l') in 
-                                                let nr = filter2Know nm (mergeKnowKnow f (Node a l m r) r') in 
+    |   a' < a                              =   let nm = mergeKnowKnow f (Node a l m r) m' in
+                                                let nl = filter2Know nm (mergeKnowKnow f (Node a l m r) l') in
+                                                let nr = filter2Know nm (mergeKnowKnow f (Node a l m r) r') in
                                                 if isnoKnow nl  && isnoKnow nr then nm else Node a' nl nm nr
-    |   otherwise                           =   let nm = mergeKnowKnow f m m' in 
-                                                let nl = filter2Know nm (joinKnow (mergeKnowKnow f l l') (joinKnow (mergeKnowKnow f l m') (mergeKnowKnow f m l'))) in 
-                                                let nr = filter2Know nm (joinKnow (mergeKnowKnow f r r') (joinKnow (mergeKnowKnow f r m') (mergeKnowKnow f m r'))) in 
-                                                if isnoKnow nl && isnoKnow nr then nm else Node a nl nm nr 
+    |   otherwise                           =   let nm = mergeKnowKnow f m m' in
+                                                let nl = filter2Know nm (joinKnow (mergeKnowKnow f l l') (joinKnow (mergeKnowKnow f l m') (mergeKnowKnow f m l'))) in
+                                                let nr = filter2Know nm (joinKnow (mergeKnowKnow f r r') (joinKnow (mergeKnowKnow f r m') (mergeKnowKnow f m r'))) in
+                                                if isnoKnow nl && isnoKnow nr then nm else Node a nl nm nr
 
 
 
 
 -- Make sure that a knowledge database has all its own cuts
-fullcutKnow :: Ord a  => (b -> b -> b) -> Know a b -> Know a b 
-fullcutKnow f No = No 
-fullcutKnow f (Yes b) = Yes b 
-fullcutKnow f (Node a l m r) =  let m' = fullcutKnow f m in 
-                                let l' = filter2Know m' (fullcutKnow f (joinKnow l m')) in 
-                                let r' = filter2Know m' (fullcutKnow f (joinKnow r m')) in 
-                                let m'' = joinKnow m' (mergeKnowKnow f l' r') in 
-                                let l'' = filter2Know m'' l'' in 
-                                let r'' = filter2Know m'' r'' in 
+fullcutKnow :: Ord a  => (b -> b -> b) -> Know a b -> Know a b
+fullcutKnow f No = No
+fullcutKnow f (Yes b) = Yes b
+fullcutKnow f (Node a l m r) =  let m' = fullcutKnow f m in
+                                let l' = filter2Know m' (fullcutKnow f (joinKnow l m')) in
+                                let r' = filter2Know m' (fullcutKnow f (joinKnow r m')) in
+                                let m'' = joinKnow m' (mergeKnowKnow f l' r') in
+                                let l'' = filter2Know m'' l'' in
+                                let r'' = filter2Know m'' r'' in
                                 if isnoKnow l'' && isnoKnow r'' then m'' else Node a l'' m'' r''
 
 -- find all cuts between knowledge bases, not covered by either
-cutKnowKnow :: Ord a => (b -> b -> b) -> Know a b -> Know a b -> Know a b 
-cutKnowKnow f No t'                         =   No 
+cutKnowKnow :: Ord a => (b -> b -> b) -> Know a b -> Know a b -> Know a b
+cutKnowKnow f No t'                         =   No
 cutKnowKnow f (Yes b) t'                    =   No
-cutKnowKnow f t No                          =   No 
+cutKnowKnow f t No                          =   No
 cutKnowKnow f t (Yes b')                    =   No
-cutKnowKnow f (Node a l m r) (Node a' l' m' r')  
-    |   a < a'                              =   let nm = cutKnowKnow f m (Node a' l' m' r') in 
-                                                let nl = filter2Know m (filter2Know nm (cutKnowKnow f l (Node a' l' m' r'))) in 
-                                                let nr = filter2Know m (filter2Know nm (cutKnowKnow f r (Node a' l' m' r'))) in 
+cutKnowKnow f (Node a l m r) (Node a' l' m' r')
+    |   a < a'                              =   let nm = cutKnowKnow f m (Node a' l' m' r') in
+                                                let nl = filter2Know m (filter2Know nm (cutKnowKnow f l (Node a' l' m' r'))) in
+                                                let nr = filter2Know m (filter2Know nm (cutKnowKnow f r (Node a' l' m' r'))) in
                                                 if isnoKnow nl  && isnoKnow nr then nm else Node a nl nm nr
-    |   a' < a                              =   let nm = cutKnowKnow f (Node a l m r) m' in 
-                                                let nl = filter2Know m' (filter2Know nm (cutKnowKnow f (Node a l m r) l')) in 
-                                                let nr = filter2Know m' (filter2Know nm (cutKnowKnow f (Node a l m r) r')) in 
+    |   a' < a                              =   let nm = cutKnowKnow f (Node a l m r) m' in
+                                                let nl = filter2Know m' (filter2Know nm (cutKnowKnow f (Node a l m r) l')) in
+                                                let nr = filter2Know m' (filter2Know nm (cutKnowKnow f (Node a l m r) r')) in
                                                 if isnoKnow nl  && isnoKnow nr then nm else Node a' nl nm nr
     |   otherwise                           =   let jm = joinKnow m m' in
-                                                let nm = joinKnow   (cutKnowKnow f m m') 
-                                                                    (filter2Know m (filter2Know m' (joinKnow (mergeKnowKnow f r' l) (mergeKnowKnow f r l')))) in 
-                                                let nl = filter2Know nm (joinKnow (filter2Know m (filter2Know m' (cutKnowKnow f l l'))) (joinKnow (filter2Know m (filter2Know l' (cutKnowKnow f l m'))) (filter2Know l (filter2Know m' (cutKnowKnow f m l'))))) in 
-                                                let nr = filter2Know nm (joinKnow (filter2Know m (filter2Know m' (cutKnowKnow f r r'))) (joinKnow (filter2Know m (filter2Know r' (cutKnowKnow f r m'))) (filter2Know r (filter2Know m' (cutKnowKnow f m r'))))) in 
-                                                if isnoKnow nl && isnoKnow nr then nm else Node a nl nm nr 
+                                                let nm = joinKnow   (cutKnowKnow f m m')
+                                                                    (filter2Know m (filter2Know m' (joinKnow (mergeKnowKnow f r' l) (mergeKnowKnow f r l')))) in
+                                                let nl = filter2Know nm (joinKnow (filter2Know m (filter2Know m' (cutKnowKnow f l l'))) (joinKnow (filter2Know m (filter2Know l' (cutKnowKnow f l m'))) (filter2Know l (filter2Know m' (cutKnowKnow f m l'))))) in
+                                                let nr = filter2Know nm (joinKnow (filter2Know m (filter2Know m' (cutKnowKnow f r r'))) (joinKnow (filter2Know m (filter2Know r' (cutKnowKnow f r m'))) (filter2Know r (filter2Know m' (cutKnowKnow f m r'))))) in
+                                                if isnoKnow nl && isnoKnow nr then nm else Node a nl nm nr
 
-cutKnowKnow' :: Ord a => (b -> b -> b) -> Know a b -> Know a b -> Know a b 
-cutKnowKnow' f No t'                         =   No 
+cutKnowKnow' :: Ord a => (b -> b -> b) -> Know a b -> Know a b -> Know a b
+cutKnowKnow' f No t'                         =   No
 cutKnowKnow' f (Yes b) t'                    =   No
-cutKnowKnow' f t No                          =   No 
+cutKnowKnow' f t No                          =   No
 cutKnowKnow' f t (Yes b')                    =   No
-cutKnowKnow' f (Node a l m r) (Node a' l' m' r')  
-    |   a < a'                              =   let nm = cutKnowKnow' f m (Node a' l' m' r') in 
-                                                let nl = filter2Know nm (cutKnowKnow' f l (Node a' l' m' r')) in 
-                                                let nr = filter2Know nm (cutKnowKnow' f r (Node a' l' m' r')) in 
+cutKnowKnow' f (Node a l m r) (Node a' l' m' r')
+    |   a < a'                              =   let nm = cutKnowKnow' f m (Node a' l' m' r') in
+                                                let nl = filter2Know nm (cutKnowKnow' f l (Node a' l' m' r')) in
+                                                let nr = filter2Know nm (cutKnowKnow' f r (Node a' l' m' r')) in
                                                 if isnoKnow nl  && isnoKnow nr then nm else Node a nl nm nr
-    |   a' < a                              =   let nm = cutKnowKnow f (Node a l m r) m' in 
-                                                let nl = filter2Know nm (cutKnowKnow' f (Node a l m r) l') in 
-                                                let nr = filter2Know nm (cutKnowKnow' f (Node a l m r) r') in 
+    |   a' < a                              =   let nm = cutKnowKnow f (Node a l m r) m' in
+                                                let nl = filter2Know nm (cutKnowKnow' f (Node a l m r) l') in
+                                                let nr = filter2Know nm (cutKnowKnow' f (Node a l m r) r') in
                                                 if isnoKnow nl  && isnoKnow nr then nm else Node a' nl nm nr
     |   otherwise                           =   let jm = joinKnow m m' in
-                                                let nm = joinKnow   (cutKnowKnow' f m m') 
-                                                                    (filter2Know m (joinKnow (mergeKnowKnow f r' l) (mergeKnowKnow f r l'))) in 
-                                                let nl = filter2Know nm (joinKnow (cutKnowKnow' f l l') (joinKnow (cutKnowKnow f l m') (cutKnowKnow f m l'))) in 
-                                                let nr = filter2Know nm (joinKnow (cutKnowKnow' f r r') (joinKnow (cutKnowKnow f r m') (cutKnowKnow f m r'))) in 
-                                                if isnoKnow nl && isnoKnow nr then nm else Node a nl nm nr 
+                                                let nm = joinKnow   (cutKnowKnow' f m m')
+                                                                    (filter2Know m (joinKnow (mergeKnowKnow f r' l) (mergeKnowKnow f r l'))) in
+                                                let nl = filter2Know nm (joinKnow (cutKnowKnow' f l l') (joinKnow (cutKnowKnow f l m') (cutKnowKnow f m l'))) in
+                                                let nr = filter2Know nm (joinKnow (cutKnowKnow' f r r') (joinKnow (cutKnowKnow f r m') (cutKnowKnow f m r'))) in
+                                                if isnoKnow nl && isnoKnow nr then nm else Node a nl nm nr
 
-ocutKnow :: Ord a => (b -> b -> b) -> Know a b -> Know a b 
-ocutKnow f No = No 
-ocutKnow f (Yes b) = No 
-ocutKnow f (Node a l m r) = 
-    let nm = joinKnow (ocutKnow f m) (filter2Know m (mergeKnowKnow f r l)) in 
-    let nl = filter2Know nm (joinKnow (filter2Know m (ocutKnow f l)) (filter2Know m (cutKnowKnow f l m))) in 
-    let nr = filter2Know nm (joinKnow (filter2Know m (ocutKnow f r)) (filter2Know m (cutKnowKnow f r m))) in 
-    if isnoKnow nl && isnoKnow nr then nm else Node a nl nm nr 
+ocutKnow :: Ord a => (b -> b -> b) -> Know a b -> Know a b
+ocutKnow f No = No
+ocutKnow f (Yes b) = No
+ocutKnow f (Node a l m r) =
+    let nm = joinKnow (ocutKnow f m) (filter2Know m (mergeKnowKnow f r l)) in
+    let nl = filter2Know nm (joinKnow (filter2Know m (ocutKnow f l)) (filter2Know m (cutKnowKnow f l m))) in
+    let nr = filter2Know nm (joinKnow (filter2Know m (ocutKnow f r)) (filter2Know m (cutKnowKnow f r m))) in
+    if isnoKnow nl && isnoKnow nr then nm else Node a nl nm nr
 
-ocutKnow' :: Ord a => (b -> b -> b) -> Know a b -> Know a b 
-ocutKnow' f No = No 
-ocutKnow' f (Yes b) = No 
-ocutKnow' f (Node a l m r) = 
-    let nm = joinKnow (ocutKnow' f m) (mergeKnowKnow f r l) in 
-    let nl = filter2Know nm (joinKnow (ocutKnow' f l) (cutKnowKnow' f l m)) in 
-    let nr = filter2Know nm (joinKnow (ocutKnow' f r) (cutKnowKnow' f r m)) in 
-    if isnoKnow nl && isnoKnow nr then nm else Node a nl nm nr 
+ocutKnow' :: Ord a => (b -> b -> b) -> Know a b -> Know a b
+ocutKnow' f No = No
+ocutKnow' f (Yes b) = No
+ocutKnow' f (Node a l m r) =
+    let nm = joinKnow (ocutKnow' f m) (mergeKnowKnow f r l) in
+    let nl = filter2Know nm (joinKnow (ocutKnow' f l) (cutKnowKnow' f l m)) in
+    let nr = filter2Know nm (joinKnow (ocutKnow' f r) (cutKnowKnow' f r m)) in
+    if isnoKnow nl && isnoKnow nr then nm else Node a nl nm nr
