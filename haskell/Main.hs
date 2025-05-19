@@ -12,7 +12,7 @@ main :: IO ()
 -- Alternatively, make your own example. 
 -- Make list of (Formula , Boolean), Boolean designates whether you want to assume the formula (True) or want to prove it (False)
 -- The following asks: A∨B , A⇒B ⊢ B 
---main = drunner [(Or [basic "A" , basic "B"] , True) , (Im (basic "A") (basic "B") , True) , (basic "B" , False) ]
+main = drunner [(Or [basic "A" , basic "B"] , True) , (Im (basic "A") (basic "B") , True) , (basic "B" , False) ]
 
 -- ==========================================
 -- Non-modal conjunction disjunction examples
@@ -52,7 +52,7 @@ main :: IO ()
 --main = drunner [(Im (notF (notF (notF (basic "A")))) (notF (basic "A")) , False)]
 
 -- (A∨¬A) and ¬¬(A∨¬A)
-main = drunner  [(Or [basic "A" , notF (basic "A")] , False) , (notF (notF (Or [basic "A" , notF (basic "A")])) , False)]
+--main = drunner  [(Or [basic "A" , notF (basic "A")] , False) , (notF (notF (Or [basic "A" , notF (basic "A")])) , False)]
 
 -- =========================
 -- Necessity (Box) examples
